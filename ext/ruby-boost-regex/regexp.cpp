@@ -4,13 +4,13 @@
 #include <exception>
 #include "ruby.h"
 
-#ifdef RUBY_19
+#ifdef RUBY_18
+  #include "re.h"
+  // RE_NREGS got renamed to ONIG_NREGION. Why? Why not!
+  #define ONIG_NREGION RE_NREGS
+#else
 #include "ruby/re.h"
 #include "ruby/oniguruma.h"
-#else
-#include "re.h"
-// RE_NREGS got renamed to ONIG_NREGION. Why? Why not!
-#define ONIG_NREGION RE_NREGS 
 #endif
 
 static VALUE rb_mBoost;
@@ -53,13 +53,13 @@ init_regs(struct re_registers *regs,  int num_regs)
     num_regs = ONIG_NREGION;
 
   if (regs->allocated == 0) {
-    regs->beg = TMALLOC(num_regs, int);
-    regs->end = TMALLOC(num_regs, int);
+    regs->beg = TMALLOC(num_regs, long);
+    regs->end = TMALLOC(num_regs, long);
     regs->allocated = num_regs;
   }
   else if (regs->allocated < num_regs) {
-    TREALLOC(regs->beg, num_regs, int);
-    TREALLOC(regs->end, num_regs, int);
+    TREALLOC(regs->beg, num_regs, long);
+    TREALLOC(regs->end, num_regs, long);
     regs->allocated = num_regs;
   }
   for (i=0; i<num_regs; i++) {
@@ -74,13 +74,13 @@ re_copy_registers(struct re_registers *regs1, struct re_registers *regs2)
 
   if (regs1 == regs2) return;
   if (regs1->allocated == 0) {
-    regs1->beg = TMALLOC(regs2->num_regs, int);
-    regs1->end = TMALLOC(regs2->num_regs, int);
+    regs1->beg = TMALLOC(regs2->num_regs, long);
+    regs1->end = TMALLOC(regs2->num_regs, long);
     regs1->allocated = regs2->num_regs;
   }
   else if (regs1->allocated < regs2->num_regs) {
-    TREALLOC(regs1->beg, regs2->num_regs, int);
-    TREALLOC(regs1->end, regs2->num_regs, int);
+    TREALLOC(regs1->beg, regs2->num_regs, long);
+    TREALLOC(regs1->end, regs2->num_regs, long);
     regs1->allocated = regs2->num_regs;
   }
   for (i=0; i<regs2->num_regs; i++) {
@@ -90,7 +90,7 @@ re_copy_registers(struct re_registers *regs1, struct re_registers *regs2)
   regs1->num_regs = regs2->num_regs;
 }
 
-#ifndef RUBY_19
+#ifdef RUBY_18
 
 // this is 1.8.x global variable stuff
 
@@ -142,14 +142,17 @@ static void save_backref_with_smatch(VALUE str,
     rb_backref_set(match);                                     
 }
 
-#else // Is Ruby 1.9+
+#else  // Is Ruby 1.9+
 
 static VALUE
 match_alloc(VALUE klass)
 {
-    NEWOBJ(match, struct RMatch);
-    OBJSETUP(match, klass, T_MATCH);
-
+    #ifdef RUBY_19
+      NEWOBJ(match, struct RMatch);
+      OBJSETUP(match, klass, T_MATCH);
+    #else
+      NEWOBJ_OF(match, struct RMatch, klass, T_MATCH);
+    #endif
     match->str = 0;
     match->rmatch = 0;
     match->regexp = 0;
@@ -197,7 +200,7 @@ static void save_backref_with_smatch(VALUE str,
     rb_backref_set(match);
 }
 
-#endif RUBY_19
+#endif
 
 /////////////////////////////
 
